@@ -30,3 +30,16 @@ export async function initSSHTunnel() {
     throw err;
   }
 }
+
+
+export async function closeSSHTunnel() {
+  if (tunnel) {
+    try {
+      tunnel.close();
+      console.log("✅ SSH tunnel closed");
+      tunnel = null;
+    } catch (err) {
+      console.error("❌ Error closing SSH tunnel:", err);
+    }
+  }
+}
