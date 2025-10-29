@@ -1,18 +1,17 @@
 import { createTunnel } from "tunnel-ssh";
 
-let tunnel = null; // 👈 shared variable accessible to both functions
-
 const sshConfig = {
   host: process.env.SSH_HOST,
   port: parseInt(process.env.SSH_PORT) || 22,
   username: process.env.SSH_USERNAME,
   password: process.env.SSH_PASSWORD,
-  dstHost: "AI",
+  dstHost: "AI",          // 👈 change this line
   dstPort: 1521,
   localHost: "127.0.0.1",
   localPort: 1521,
   keepAlive: true,
 };
+
 
 export async function initSSHTunnel() {
   console.log("SSH Config (sanitized):", {
@@ -24,10 +23,7 @@ export async function initSSHTunnel() {
 
   try {
     console.log(`🔐 Creating SSH tunnel to ${sshConfig.host}...`);
-
-    // 👇 assign to the shared variable, not a new local one
-    tunnel = await createTunnel({}, null, sshConfig);
-
+    const tunnel = await createTunnel({}, null, sshConfig);
     console.log("✅ SSH tunnel established");
     return tunnel;
   } catch (err) {
@@ -35,6 +31,7 @@ export async function initSSHTunnel() {
     throw err;
   }
 }
+
 
 export async function closeSSHTunnel() {
   if (tunnel) {
@@ -45,7 +42,5 @@ export async function closeSSHTunnel() {
     } catch (err) {
       console.error("❌ Error closing SSH tunnel:", err);
     }
-  } else {
-    console.log("ℹ️ No SSH tunnel to close");
   }
 }
