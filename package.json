@@ -6,20 +6,22 @@
   "type": "module",
   "scripts": {
     "start": "node ./src/server.js",
-    "dev": "nodemon --watch src ./src/server.js"
+    "dev": "nodemon --watch src ./src/server.js",
+    "build": "echo 'No build step needed for Node.js'"
   },
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
-    "db": "^6.0.3",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
-    "oracle": "^0.4.1",
-    "oracledb": "^6.9.0",
-    "tunnel-ssh": "^5.2.0"
+    "oracledb": "^6.10.0",
+    "ssh2": "^1.15.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
