@@ -1,0 +1,11 @@
+# Ignore unnecessary files
+node_modules
+npm-debug.log
+.git
+.gitignore
+logs
+dist
+build
+
+# ✅ DO NOT ignore the oracle client
+!oracle_client/
