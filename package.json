@@ -7,9 +7,8 @@
 "scripts": {
   "start": "node ./src/server.js",
   "dev": "nodemon --watch src ./src/server.js",
-  "postinstall": "mkdir -p /opt/oracle && curl -L -o /opt/oracle/ic.zip https://download.oracle.com/otn_software/linux/instantclient/instantclient-basiclite-linuxx64.zip && unzip -o /opt/oracle/ic.zip -d /opt/oracle"
+  "postinstall": "mkdir -p ./oracle_client && curl -L -o ./oracle_client/ic.zip https://download.oracle.com/otn_software/linux/instantclient/instantclient-basiclite-linuxx64.zip && unzip -o ./oracle_client/ic.zip -d ./oracle_client"
 },
-
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {

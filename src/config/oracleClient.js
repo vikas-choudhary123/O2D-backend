@@ -35,15 +35,20 @@
 
 import oracledb from 'oracledb';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export function initOracleClient() {
   try {
-    const libDir = '/opt/oracle/instantclient_19_24';
+    const libDir = path.join(__dirname, '../oracle_client/instantclient_19_24');
     if (fs.existsSync(libDir)) {
       oracledb.initOracleClient({ libDir });
       console.log('✅ Oracle Thick Client initialized');
     } else {
-      console.log('⚠️ Oracle Instant Client not found, using Thin mode');
+      console.log('⚠️ Instant Client not found, using Thin mode');
     }
   } catch (err) {
     console.error('❌ Failed to initialize Oracle Client:', err);
