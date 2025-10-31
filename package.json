@@ -5,7 +5,6 @@
   "main": "src/server.js",
   "type": "module",
 "scripts": {
-  // "start": "node ./src/server.js",
   "start": "export LD_LIBRARY_PATH=$(pwd)/oracle_client/instantclient_23_26 && node ./src/server.js",
 
   "dev": "nodemon --watch src ./src/server.js",
