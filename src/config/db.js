@@ -25,8 +25,9 @@ export async function initPool() {
 
     console.log("📡 Creating Oracle connection pool...");
 
-    // Test the most common Oracle configurations
+    // Test Oracle configurations - ADDED ora11g
     const connectionTests = [
+      { connectString: "127.0.0.1:1521/ora11g", description: "ora11g service" },
       { connectString: "127.0.0.1:1521/ORCL", description: "ORCL service" },
       { connectString: "127.0.0.1:1521/XE", description: "XE service" },
       { connectString: "127.0.0.1:1521", description: "No service name" },
@@ -45,7 +46,7 @@ export async function initPool() {
           poolMin: 1,
           poolMax: 1,
           poolTimeout: 10,
-          connectTimeout: 15000, // 15 seconds timeout
+          connectTimeout: 15000,
         };
 
         const testPool = await oracledb.createPool(testConfig);
