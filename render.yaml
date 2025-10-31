@@ -9,3 +9,5 @@ services:
     envVars:
       - key: LD_LIBRARY_PATH
         value: /opt/render/project/src/oracle_client/instantclient_23_26
+    envSpecific:
+      native: true
