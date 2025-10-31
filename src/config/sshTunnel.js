@@ -1,36 +1,90 @@
 import { Client } from 'ssh2';
+import net from 'net';
 import dotenv from 'dotenv';
 
+// Load environment variables first
 dotenv.config();
 
 let sshClient = null;
-let tunnel = null;
+let tunnelServer = null;
+const LOCAL_PORT = 1521;
 
 export async function initSSHTunnel() {
   return new Promise((resolve, reject) => {
-    console.log("🔐 Creating SSH tunnel to", process.env.SSH_HOST);
+    // Get environment variables with validation
+    const SSH_HOST = process.env.SSH_HOST;
+    const SSH_PORT = parseInt(process.env.SSH_PORT) || 22;
+    const SSH_USER = process.env.SSH_USER;
+    const SSH_PASSWORD = process.env.SSH_PASSWORD;
+
+    console.log("🔐 Creating SSH tunnel to", SSH_HOST);
+    console.log("🔐 SSH User:", SSH_USER ? '***' : 'NOT SET');
+    console.log("🔐 SSH Port:", SSH_PORT);
+
+    // Validate required environment variables
+    if (!SSH_HOST) {
+      reject(new Error('SSH_HOST environment variable is required'));
+      return;
+    }
+    if (!SSH_USER) {
+      reject(new Error('SSH_USER environment variable is required'));
+      return;
+    }
+    if (!SSH_PASSWORD) {
+      reject(new Error('SSH_PASSWORD environment variable is required'));
+      return;
+    }
 
     sshClient = new Client();
     
     sshClient.on('ready', () => {
       console.log('✅ SSH Client ready');
       
-      // Forward local port to remote Oracle database
-      sshClient.forwardOut(
-        '127.0.0.1',
-        1521,
-        process.env.ORACLE_HOST || '127.0.0.1',
-        parseInt(process.env.ORACLE_PORT) || 1521,
-        (err, stream) => {
-          if (err) {
-            console.error('❌ SSH forward error:', err);
-            reject(err);
-            return;
+      // Create a local TCP server that forwards to remote Oracle
+      tunnelServer = net.createServer((localSocket) => {
+        console.log('🔗 Local connection received for Oracle');
+        
+        sshClient.forwardOut(
+          '127.0.0.1',
+          LOCAL_PORT,
+          SSH_HOST, // Forward to the same SSH host (assuming Oracle is on same server)
+          1521,
+          (err, remoteStream) => {
+            if (err) {
+              console.error('❌ SSH forward error:', err);
+              localSocket.destroy();
+              return;
+            }
+            
+            console.log('✅ SSH forward established');
+            localSocket.pipe(remoteStream).pipe(localSocket);
+            
+            localSocket.on('error', (err) => {
+              console.log('Local socket error:', err);
+            });
+            
+            remoteStream.on('error', (err) => {
+              console.log('Remote stream error:', err);
+            });
           }
-          console.log('✅ SSH tunnel established');
-          resolve(sshClient);
+        );
+      });
+
+      tunnelServer.listen(LOCAL_PORT, '127.0.0.1', (err) => {
+        if (err) {
+          console.error('❌ Tunnel server error:', err);
+          reject(err);
+          return;
         }
-      );
+        
+        console.log(`✅ SSH tunnel established on 127.0.0.1:${LOCAL_PORT}`);
+        resolve({ sshClient, tunnelServer });
+      });
+
+      tunnelServer.on('error', (err) => {
+        console.error('❌ Tunnel server error:', err);
+        reject(err);
+      });
     });
 
     sshClient.on('error', (err) => {
@@ -40,50 +94,49 @@ export async function initSSHTunnel() {
 
     // SSH connection configuration
     const sshConfig = {
-      host: process.env.SSH_HOST,
-      port: parseInt(process.env.SSH_PORT) || 22,
-      username: process.env.SSH_USER,
-      readyTimeout: 20000,
+      host: SSH_HOST,
+      port: SSH_PORT,
+      username: SSH_USER,
+      password: SSH_PASSWORD,
+      readyTimeout: 30000,
+      keepaliveInterval: 10000,
       algorithms: {
         kex: [
           'ecdh-sha2-nistp256',
-          'ecdh-sha2-nistp384',
+          'ecdh-sha2-nistp384', 
           'ecdh-sha2-nistp521',
           'diffie-hellman-group14-sha256'
-        ],
-        cipher: [
-          'aes128-gcm',
-          'aes256-gcm',
-          'aes128-cbc',
-          'aes256-cbc'
         ]
       }
     };
 
-    // Add authentication method (private key or password)
-    if (process.env.SSH_PRIVATE_KEY) {
-      sshConfig.privateKey = process.env.SSH_PRIVATE_KEY.replace(/\\n/g, '\n');
-    } else if (process.env.SSH_PASSWORD) {
-      sshConfig.password = process.env.SSH_PASSWORD;
-    } else {
-      reject(new Error('No SSH authentication method provided'));
-      return;
-    }
-
+    console.log(`🔐 Connecting to SSH with user: ${SSH_USER}`);
     sshClient.connect(sshConfig);
   });
 }
 
 export async function closeSSHTunnel() {
   return new Promise((resolve) => {
-    if (sshClient) {
-      sshClient.on('close', () => {
-        console.log('✅ SSH tunnel closed');
+    console.log('🛑 Closing SSH tunnel...');
+    
+    if (tunnelServer) {
+      tunnelServer.close((err) => {
+        if (err) console.error('Error closing tunnel server:', err);
+        if (sshClient) {
+          sshClient.end();
+        }
         sshClient = null;
+        tunnelServer = null;
+        console.log('✅ SSH tunnel closed');
         resolve();
       });
+    } else if (sshClient) {
       sshClient.end();
+      sshClient = null;
+      console.log('✅ SSH tunnel closed');
+      resolve();
     } else {
+      console.log('✅ SSH tunnel already closed');
       resolve();
     }
   });

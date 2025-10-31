@@ -9,12 +9,37 @@ dotenv.config();
 let pool;
 let sshTunnelActive = false;
 
-// Try different service names
-const SERVICE_NAMES = ['ORCL', 'XE', 'XEPDB1', 'orcl', 'ora11g'];
+// Validate all required environment variables
+function validateEnv() {
+  const required = [
+    'ORACLE_USER',
+    'ORACLE_PASSWORD', 
+    'SSH_HOST',
+    'SSH_USER',
+    'SSH_PASSWORD'
+  ];
+
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  console.log('✅ All required environment variables are set');
+  console.log('🔧 Config:', {
+    oracleUser: process.env.ORACLE_USER,
+    sshHost: process.env.SSH_HOST,
+    sshUser: process.env.SSH_USER,
+    sshPort: process.env.SSH_PORT || 22
+  });
+}
 
 export async function initPool() {
   try {
     console.log("🔐 Initializing SSH tunnel...");
+    
+    // Validate environment variables first
+    validateEnv();
     
     // Initialize SSH tunnel first
     await initSSHTunnel();
@@ -28,61 +53,31 @@ export async function initPool() {
 
     console.log("📡 Creating Oracle connection pool...");
 
-    // Try different service names
-    let lastError = null;
-    
-    for (const serviceName of SERVICE_NAMES) {
-      try {
-        console.log(`🔄 Trying service name: ${serviceName}`);
-        
-        const dbConfig = {
-          user: process.env.ORACLE_USER,
-          password: process.env.ORACLE_PASSWORD,
-          connectString: `127.0.0.1:1521/${serviceName}`,
-          poolMin: 1,
-          poolMax: 4,
-          poolIncrement: 1,
-          poolTimeout: 60,
-          queueTimeout: 30000,
-          connectTimeout: 30000,
-        };
+    // Connection configuration through SSH tunnel
+    const dbConfig = {
+      user: process.env.ORACLE_USER,
+      password: process.env.ORACLE_PASSWORD,
+      connectString: "127.0.0.1:1521/ora11g",
+      poolMin: 1,
+      poolMax: 4,
+      poolIncrement: 1,
+      poolTimeout: 60,
+      queueTimeout: 30000,
+      connectTimeout: 30000,
+    };
 
-        console.log('Database config:', { 
-          user: dbConfig.user,
-          connectString: dbConfig.connectString
-        });
+    console.log('Database config:', { 
+      user: dbConfig.user,
+      connectString: dbConfig.connectString
+    });
 
-        pool = await oracledb.createPool(dbConfig);
-        console.log(`✅ Oracle connection pool started with service: ${serviceName}`);
+    pool = await oracledb.createPool(dbConfig);
+    console.log("✅ Oracle connection pool started");
 
-        // Test connection
-        console.log("🧪 Testing database connection...");
-        await testConnectionWithRetry();
-        console.log("✅ Database connection test successful");
-        
-        return; // Success - exit the loop
-        
-      } catch (err) {
-        lastError = err;
-        console.log(`❌ Service ${serviceName} failed:`, err.message);
-        
-        // Close pool if it was created
-        if (pool) {
-          try {
-            await pool.close(0);
-            pool = null;
-          } catch (closeErr) {
-            console.error('Error closing pool:', closeErr);
-          }
-        }
-        
-        // Continue to next service name
-        continue;
-      }
-    }
-    
-    // If we get here, all service names failed
-    throw new Error(`All service names failed. Last error: ${lastError?.message}`);
+    // Test connection with retry logic
+    console.log("🧪 Testing database connection...");
+    await testConnectionWithRetry();
+    console.log("✅ Database connection test successful");
     
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
@@ -95,19 +90,13 @@ async function testConnectionWithRetry(maxRetries = 3, retryDelay = 2000) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let connection;
     try {
-      console.log(`🔗 Attempt ${attempt}: Getting connection from pool...`);
       connection = await pool.getConnection();
-      console.log(`✅ Attempt ${attempt}: Got connection, executing test query...`);
-      
       const result = await connection.execute(`SELECT 1 FROM DUAL`);
-      console.log(`✅ Attempt ${attempt}: Test query successful`);
-      
       await connection.close();
       console.log(`✅ Connection test successful (attempt ${attempt})`);
       return;
     } catch (err) {
-      console.log(`❌ Attempt ${attempt} failed:`, err.message);
-      
+      console.log(`⚠️ Connection test attempt ${attempt} failed:`, err.message);
       if (connection) {
         try {
           await connection.close();
@@ -115,12 +104,10 @@ async function testConnectionWithRetry(maxRetries = 3, retryDelay = 2000) {
           console.error('Error closing connection:', closeErr);
         }
       }
-      
       if (attempt < maxRetries) {
         console.log(`🔄 Retrying in ${retryDelay/1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       } else {
-        console.log(`💥 All connection attempts failed`);
         throw err;
       }
     }

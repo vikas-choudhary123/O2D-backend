@@ -14,20 +14,13 @@
 
 
 
-
-import oracledb from "oracledb";
+import oracledb from 'oracledb';
 
 export function initOracleClient() {
   try {
-    // Only initialize locally (Mac)
-    if (process.platform === "darwin") {
-      oracledb.initOracleClient({ libDir: "/opt/oracle/instantclient_23_3_arm64" });
-      console.log("✅ Oracle client initialized (local Mac)");
-    } else {
-      console.log("ℹ️ Skipping Oracle client init (cloud environment)");
-    }
+    console.log('ℹ️ Using Oracle Thin Client (cloud environment)');
+    // No initialization needed for thin client in Render
   } catch (err) {
-    console.error("❌ Failed to initialize Oracle client:", err);
-    process.exit(1);
+    console.log('ℹ️ Oracle Thin Client mode');
   }
 }
