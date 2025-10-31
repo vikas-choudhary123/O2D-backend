@@ -9,8 +9,12 @@ const sshConfig = {
   port: parseInt(process.env.SSH_PORT) || 22,
 
   // 👇 FIXED: Oracle is listening on 192.168.1.6 inside the remote network
-  dstHost: "192.168.1.6",
-  dstPort: 1521,
+  // dstHost: "192.168.1.6",
+  // dstPort: 1521,
+
+  dstHost: "127.0.0.1",
+dstPort: 1521,
+
 
   localHost: "127.0.0.1",
   localPort: 1521,
