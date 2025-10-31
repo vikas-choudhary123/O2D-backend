@@ -1,7 +1,15 @@
+# Use a slim Node base image
 FROM node:18-slim
 
-# Install required system libraries
-RUN apt-get update && apt-get install -y libaio1 unzip curl
+# Install required system libraries and tools
+RUN apt-get update && apt-get install -y \
+    libaio1 \
+    unzip \
+    curl \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
@@ -13,7 +21,7 @@ RUN npm install
 # Copy all code
 COPY . .
 
-# Set Oracle client environment variable
+# Set Oracle Client environment variable
 ENV LD_LIBRARY_PATH=/app/oracle_client/instantclient_23_26
 
 # Expose your app’s port
