@@ -1,6 +1,9 @@
-import tunnel from "tunnel-ssh";
+// ✅ Works in ESM (type: "module")
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const tunnel = require("tunnel-ssh");
 
-let tunnelServer = null; // store the tunnel globally so we can close it later
+let tunnelServer = null;
 
 export async function initSSHTunnel() {
   console.log("🔐 Creating SSH tunnel...");
@@ -12,11 +15,11 @@ export async function initSSHTunnel() {
       host: process.env.SSH_HOST,
       port: parseInt(process.env.SSH_PORT) || 22,
 
-      // 👇 These two tell the tunnel where to connect INSIDE your LAN
-      dstHost: "192.168.1.6", // Oracle DB server inside the LAN
-      dstPort: 1521,          // Oracle DB port
+      // 👇 Destination: where Oracle DB actually runs (inside LAN)
+      dstHost: "192.168.1.6",
+      dstPort: 1521,
 
-      // 👇 These control the local endpoint your app will connect to
+      // 👇 Local binding: what your Node app connects to
       localHost: "127.0.0.1",
       localPort: 1521,
 

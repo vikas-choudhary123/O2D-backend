@@ -14,20 +14,20 @@ const server = app.listen(port, async () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('⚠️ SIGTERM received, closing connections...');
+process.on("SIGTERM", async () => {
+  console.log("⚠️ SIGTERM received, closing connections...");
   await closePool();
   server.close(() => {
-    console.log('✅ Server closed');
+    console.log("✅ Server closed");
     process.exit(0);
   });
 });
 
-process.on('SIGINT', async () => {
-  console.log('⚠️ SIGINT received, closing connections...');
+process.on("SIGINT", async () => {
+  console.log("⚠️ SIGINT received, closing connections...");
   await closePool();
   server.close(() => {
-    console.log('✅ Server closed');
+    console.log("✅ Server closed");
     process.exit(0);
   });
 });

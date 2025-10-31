@@ -14,7 +14,7 @@ export async function initPool() {
     await initSSHTunnel();
     tunnelInitialized = true;
 
-    // Initialize Oracle client (if on macOS or local)
+    // Initialize Oracle client (for local Mac only)
     initOracleClient();
 
     console.log("📡 Creating Oracle connection pool...");
@@ -22,7 +22,7 @@ export async function initPool() {
     pool = await oracledb.createPool({
       user: process.env.ORACLE_USER,
       password: process.env.ORACLE_PASSWORD,
-      connectString: "127.0.0.1:1521/ora11g", // ✅ through SSH tunnel
+      connectString: "127.0.0.1:1521/ora11g", // ✅ via SSH tunnel
       poolMin: 1,
       poolMax: 5,
       poolIncrement: 1,
@@ -32,6 +32,7 @@ export async function initPool() {
 
     console.log("✅ Oracle connection pool started");
 
+    // Test connection
     console.log("🧪 Testing database connection...");
     const testConn = await pool.getConnection();
     console.log("✅ Test connection successful");
