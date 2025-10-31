@@ -11,19 +11,26 @@
 //     process.exit(1);
 //   }
 // }
-
-import oracledb from "oracledb";
+// import oracledb from "oracledb";
+import oracledb from 'oracledb-thin';
 
 export function initOracleClient() {
   try {
-    console.log("🔧 Configuring Oracle Client...");
+    console.log("🔧 Initializing Oracle Client for Oracle 11g...");
     
-    // Force Thin mode - no Oracle Instant Client needed
-    // This works on both macOS ARM64 and Render
-    oracledb.initOracleClient();
-    console.log("✅ Oracle Thin Client configured");
+    // For oracledb@4.2.0, we need to handle client initialization differently
+    if (process.platform === "darwin") {
+      // Local Mac development
+      oracledb.initOracleClient({ libDir: "/opt/oracle/instantclient_23_3_arm64" });
+      console.log("✅ Oracle Thick Client initialized (local Mac)");
+    } else {
+      // Render environment - let oracledb auto-detect
+      console.log("🌐 Render environment - using auto-detected Oracle client");
+      // oracledb@4.2.0 has better Oracle 11g support and can work without explicit init
+    }
     
   } catch (err) {
-    console.log("ℹ️ Using default Oracle Thin mode (no additional configuration needed)");
+    console.log("ℹ️ Oracle client initialization note:", err.message);
+    console.log("🔄 Continuing with available Oracle client mode");
   }
 }

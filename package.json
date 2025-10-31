@@ -6,8 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node ./src/server.js",
-    "dev": "nodemon --watch src ./src/server.js",
-    "build": "echo 'No build step needed for Node.js'"
+    "dev": "nodemon --watch src ./src/server.js"
   },
   "author": "Your Name",
   "license": "MIT",
@@ -15,13 +14,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
-    "oracledb": "^6.10.0",
+    "oracledb-thin": "^1.0.1",
     "ssh2": "^1.15.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }

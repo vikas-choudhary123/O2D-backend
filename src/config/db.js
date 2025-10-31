@@ -1,4 +1,5 @@
-import oracledb from "oracledb";
+// import oracledb from "oracledb";
+import oracledb from 'oracledb-thin';
 import dotenv from "dotenv";
 import { initOracleClient } from "./oracleClient.js";
 import { initSSHTunnel, closeSSHTunnel } from "./sshTunnel.js";
@@ -20,12 +21,12 @@ export async function initPool() {
     console.log("⏳ Waiting for SSH tunnel to stabilize...");
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // Initialize Oracle client (Thin mode)
+    // Initialize Oracle client
     initOracleClient();
 
-    console.log("📡 Creating Oracle connection pool...");
+    console.log("📡 Creating Oracle connection pool for Oracle 11g...");
 
-    // Oracle 11g connection configurations for Thin mode
+    // Connection configurations for Oracle 11g
     const connectionTests = [
       { 
         connectString: "127.0.0.1:1521/ora11g", 
@@ -34,6 +35,10 @@ export async function initPool() {
       { 
         connectString: "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=ora11g)))", 
         description: "TNS ora11g" 
+      },
+      { 
+        connectString: "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521))(CONNECT_DATA=(SID=ora11g)))", 
+        description: "SID ora11g" 
       },
     ];
 
@@ -70,18 +75,12 @@ export async function initPool() {
         
       } catch (err) {
         console.log(`❌ ${test.description} failed: ${err.message}`);
-        
-        // Handle Oracle 11g Thin mode compatibility
-        if (err.message.includes('NJS-138')) {
-          console.log("💡 Oracle 11g version compatibility issue in Thin mode");
-          console.log("🔄 Trying alternative approach...");
-        }
         continue;
       }
     }
 
     if (!workingConfig) {
-      throw new Error(`Oracle 11g connection failed in Thin mode.\n\nPossible solutions:\n1. Oracle 11g may not be fully supported in Thin mode\n2. Try using a different Oracle driver\n3. Consider upgrading your Oracle database\n\nLast error: Oracle 11g Thin mode compatibility`);
+      throw new Error(`Oracle 11g connection failed.\n\nTried configurations:\n- ora11g service\n- TNS ora11g\n- SID ora11g\n\nPlease verify:\n1. Oracle service 'ora11g' is running\n2. Credentials are correct: ${process.env.ORACLE_USER}/***\n3. Oracle listener is active on port 1521`);
     }
 
     // Create main pool
@@ -100,7 +99,7 @@ export async function initPool() {
     };
 
     pool = await oracledb.createPool(dbConfig);
-    console.log("✅ Oracle connection pool started");
+    console.log("✅ Oracle 11g connection pool started");
 
     // Final test
     console.log("🧪 Final connection test...");
@@ -109,7 +108,7 @@ export async function initPool() {
     console.log(`✅ Database time: ${result.rows[0][0]}`);
     await connection.close();
     
-    console.log("🎉 Oracle 11g connection established in Thin mode!");
+    console.log("🎉 Oracle 11g database connection fully established!");
     
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
