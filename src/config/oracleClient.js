@@ -43,7 +43,9 @@ const __dirname = path.dirname(__filename);
 
 export function initOracleClient() {
   try {
-    const libDir = path.join(__dirname, '../oracle_client/instantclient_19_24');
+    // const libDir = path.join(__dirname, '../oracle_client/instantclient_19_24');
+    const libDir = path.resolve('./oracle_client/instantclient_23_26');
+
     if (fs.existsSync(libDir)) {
       oracledb.initOracleClient({ libDir });
       console.log('✅ Oracle Thick Client initialized');
