@@ -6,53 +6,96 @@ import { initSSHTunnel, closeSSHTunnel } from "./sshTunnel.js";
 dotenv.config();
 
 let pool;
-let tunnelInitialized = false;
+let sshTunnelActive = false;
 
 export async function initPool() {
   try {
     console.log("🔐 Initializing SSH tunnel...");
+    
+    // Initialize SSH tunnel first
     await initSSHTunnel();
-    tunnelInitialized = true;
+    sshTunnelActive = true;
+    
+    // Wait a moment for tunnel to be fully established
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Initialize Oracle client (for local Mac only)
+    // Initialize Oracle client
     initOracleClient();
 
     console.log("📡 Creating Oracle connection pool...");
 
-    pool = await oracledb.createPool({
+    // Connection configuration through SSH tunnel
+    const dbConfig = {
       user: process.env.ORACLE_USER,
       password: process.env.ORACLE_PASSWORD,
-      connectString: "127.0.0.1:1521/ora11g", // ✅ via SSH tunnel
+      connectString: "127.0.0.1:1521/ora11g",
       poolMin: 1,
-      poolMax: 5,
+      poolMax: 4,
       poolIncrement: 1,
-      connectTimeout: 30000,
+      poolTimeout: 60,
       queueTimeout: 30000,
+      connectTimeout: 30000, // 30 seconds connection timeout
+    };
+
+    console.log('Database config:', { 
+      user: dbConfig.user,
+      connectString: dbConfig.connectString
     });
 
+    pool = await oracledb.createPool(dbConfig);
     console.log("✅ Oracle connection pool started");
 
-    // Test connection
+    // Test connection with retry logic
     console.log("🧪 Testing database connection...");
-    const testConn = await pool.getConnection();
-    console.log("✅ Test connection successful");
-    await testConn.close();
+    await testConnectionWithRetry();
+    console.log("✅ Database connection test successful");
+    
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
+    await cleanup();
+    throw err;
+  }
+}
 
-    if (pool) {
-      try {
-        await pool.close(0);
-      } catch (closeErr) {
-        console.error("Error closing pool:", closeErr.message);
+async function testConnectionWithRetry(maxRetries = 3, retryDelay = 2000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const connection = await pool.getConnection();
+      const result = await connection.execute(`SELECT 1 FROM DUAL`);
+      await connection.close();
+      console.log(`✅ Connection test successful (attempt ${attempt})`);
+      return;
+    } catch (err) {
+      console.log(`⚠️ Connection test attempt ${attempt} failed:`, err.message);
+      if (attempt < maxRetries) {
+        console.log(`🔄 Retrying in ${retryDelay/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      } else {
+        throw err;
       }
     }
+  }
+}
 
-    if (tunnelInitialized) {
-      await closeSSHTunnel();
+async function cleanup() {
+  if (pool) {
+    try {
+      await pool.close(0);
+      pool = null;
+      console.log("✅ Pool closed during cleanup");
+    } catch (closeErr) {
+      console.error("Error closing pool:", closeErr);
     }
-
-    throw err;
+  }
+  
+  if (sshTunnelActive) {
+    try {
+      await closeSSHTunnel();
+      sshTunnelActive = false;
+      console.log("✅ SSH tunnel closed during cleanup");
+    } catch (tunnelErr) {
+      console.error("Error closing SSH tunnel:", tunnelErr);
+    }
   }
 }
 
@@ -60,21 +103,9 @@ export async function getConnection() {
   if (!pool) {
     await initPool();
   }
-  return pool.getConnection();
+  return await pool.getConnection();
 }
 
 export async function closePool() {
-  try {
-    if (pool) {
-      await pool.close(10);
-      console.log("✅ Oracle pool closed");
-      pool = null;
-    }
-    if (tunnelInitialized) {
-      await closeSSHTunnel();
-      tunnelInitialized = false;
-    }
-  } catch (err) {
-    console.error("❌ Error closing pool:", err.message);
-  }
+  await cleanup();
 }
