@@ -43,31 +43,23 @@ export async function initSSHTunnel() {
       // Create a local TCP server that forwards to remote Oracle
       tunnelServer = net.createServer((localSocket) => {
         console.log('🔗 Local connection received for Oracle');
-        
-        sshClient.forwardOut(
-          '127.0.0.1',
-          LOCAL_PORT,
-          SSH_HOST, // Forward to the same SSH host (assuming Oracle is on same server)
-          1521,
-          (err, remoteStream) => {
-            if (err) {
-              console.error('❌ SSH forward error:', err);
-              localSocket.destroy();
-              return;
-            }
-            
-            console.log('✅ SSH forward established');
-            localSocket.pipe(remoteStream).pipe(localSocket);
-            
-            localSocket.on('error', (err) => {
-              console.log('Local socket error:', err);
-            });
-            
-            remoteStream.on('error', (err) => {
-              console.log('Remote stream error:', err);
-            });
-          }
-        );
+    sshClient.forwardOut(
+  '127.0.0.1',
+  LOCAL_PORT,
+  '127.0.0.1', // ✅ forward to the remote Oracle listener on localhost
+  1521,
+  (err, remoteStream) => {
+    if (err) {
+      console.error('❌ SSH forward error:', err);
+      localSocket.destroy();
+      return;
+    }
+
+    console.log('✅ SSH forward established');
+    localSocket.pipe(remoteStream).pipe(localSocket);
+  }
+);
+
       });
 
       tunnelServer.listen(LOCAL_PORT, '127.0.0.1', (err) => {
