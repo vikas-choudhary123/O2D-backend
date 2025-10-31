@@ -5,7 +5,9 @@
   "main": "src/server.js",
   "type": "module",
 "scripts": {
-  "start": "node ./src/server.js",
+  // "start": "node ./src/server.js",
+  "start": "export LD_LIBRARY_PATH=$(pwd)/oracle_client/instantclient_23_26 && node ./src/server.js",
+
   "dev": "nodemon --watch src ./src/server.js",
   "postinstall": "mkdir -p ./oracle_client && curl -L -o ./oracle_client/ic.zip https://download.oracle.com/otn_software/linux/instantclient/instantclient-basiclite-linuxx64.zip && unzip -o ./oracle_client/ic.zip -d ./oracle_client"
 },
