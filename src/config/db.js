@@ -10,44 +10,34 @@ let tunnelInitialized = false;
 
 export async function initPool() {
   try {
-    // Step 1: Create SSH tunnel
     console.log("🔐 Initializing SSH tunnel...");
     await initSSHTunnel();
     tunnelInitialized = true;
 
-    // Step 2: Initialize Oracle client
     initOracleClient();
 
-    // Step 3: Create connection pool with better error handling
     console.log("📡 Creating Oracle connection pool...");
-    
+
     pool = await oracledb.createPool({
       user: process.env.ORACLE_USER,
       password: process.env.ORACLE_PASSWORD,
-      connectString: 'localhost:1521/ora11g', // Through SSH tunnel
+      connectString: "127.0.0.1:1521/ora11g", // ✅ through SSH tunnel
       poolMin: 1,
-      poolMax: 10,
+      poolMax: 5,
       poolIncrement: 1,
-      connectTimeout: 30000, // Reduced timeout
+      connectTimeout: 30000,
       queueTimeout: 30000,
-      stmtCacheSize: 0,
     });
-    
+
     console.log("✅ Oracle connection pool started");
-    
-    // Test connection with timeout
+
     console.log("🧪 Testing database connection...");
     const testConn = await pool.getConnection();
     console.log("✅ Test connection successful");
     await testConn.close();
-    
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
-    
-    // Clean up resources
-    if (tunnelInitialized) {
-      await closeSSHTunnel();
-    }
+    if (tunnelInitialized) await closeSSHTunnel();
     if (pool) {
       try {
         await pool.close(0);
@@ -55,7 +45,7 @@ export async function initPool() {
         console.error("Error closing pool:", closeErr);
       }
     }
-    throw err; // Re-throw to let caller handle
+    throw err;
   }
 }
 
@@ -63,7 +53,7 @@ export async function getConnection() {
   if (!pool) {
     await initPool();
   }
-  return await pool.getConnection();
+  return pool.getConnection();
 }
 
 export async function closePool() {
@@ -78,6 +68,6 @@ export async function closePool() {
       tunnelInitialized = false;
     }
   } catch (err) {
-    console.error("❌ Error closing:", err);
+    console.error("❌ Error closing pool:", err);
   }
 }

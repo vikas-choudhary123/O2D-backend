@@ -1,16 +1,16 @@
-import { createTunnel } from "tunnel-ssh";
+import tunnel from "tunnel-ssh";
 
-let tunnel; // 👈 Add this line
+let server; // holds the active SSH tunnel instance
 
 const sshConfig = {
-  host: process.env.SSH_HOST,
+  username: process.env.SSH_USERNAME,    // e.g. pipe
+  password: process.env.SSH_PASSWORD,    // e.g. @dmin*$121#
+  host: process.env.SSH_HOST,            // e.g. 115.244.175.130
   port: parseInt(process.env.SSH_PORT) || 22,
-  username: process.env.SSH_USERNAME,
-  password: process.env.SSH_PASSWORD,
-  dstHost: "localhost", // update this as explained above
-  dstPort: 1521,
-  localHost: "127.0.0.1",
-  localPort: 1521,
+  dstHost: "localhost",                  // 👈 same as your working manual SSH command
+  dstPort: 1521,                         // Oracle database port on the remote server
+  localHost: "127.0.0.1",                // local side of the tunnel
+  localPort: 1521,                       // local port to connect Oracle through
   keepAlive: true,
 };
 
@@ -24,9 +24,16 @@ export async function initSSHTunnel() {
 
   try {
     console.log(`🔐 Creating SSH tunnel to ${sshConfig.host}...`);
-    tunnel = await createTunnel({}, null, sshConfig);
-    console.log("✅ SSH tunnel established");
-    return tunnel;
+
+    // tunnel-ssh returns a net.Server, not a Promise — wrap it manually
+    server = await new Promise((resolve, reject) => {
+      const srv = tunnel(sshConfig, (error) => {
+        if (error) reject(error);
+        else resolve(srv);
+      });
+    });
+
+    console.log("✅ SSH tunnel established on 127.0.0.1:1521");
   } catch (err) {
     console.error("❌ SSH tunnel failed:", err.message);
     throw err;
@@ -34,11 +41,11 @@ export async function initSSHTunnel() {
 }
 
 export async function closeSSHTunnel() {
-  if (tunnel) {
+  if (server) {
     try {
-      tunnel.close();
+      server.close();
       console.log("✅ SSH tunnel closed");
-      tunnel = null;
+      server = null;
     } catch (err) {
       console.error("❌ Error closing SSH tunnel:", err);
     }
