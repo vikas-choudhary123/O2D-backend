@@ -1,17 +1,18 @@
 import { createTunnel } from "tunnel-ssh";
 
+let tunnel; // 👈 Add this line
+
 const sshConfig = {
   host: process.env.SSH_HOST,
   port: parseInt(process.env.SSH_PORT) || 22,
   username: process.env.SSH_USERNAME,
   password: process.env.SSH_PASSWORD,
-  dstHost: "AI",          // 👈 change this line
+  dstHost: "localhost", // update this as explained above
   dstPort: 1521,
   localHost: "127.0.0.1",
   localPort: 1521,
   keepAlive: true,
 };
-
 
 export async function initSSHTunnel() {
   console.log("SSH Config (sanitized):", {
@@ -23,7 +24,7 @@ export async function initSSHTunnel() {
 
   try {
     console.log(`🔐 Creating SSH tunnel to ${sshConfig.host}...`);
-    const tunnel = await createTunnel({}, null, sshConfig);
+    tunnel = await createTunnel({}, null, sshConfig);
     console.log("✅ SSH tunnel established");
     return tunnel;
   } catch (err) {
@@ -31,7 +32,6 @@ export async function initSSHTunnel() {
     throw err;
   }
 }
-
 
 export async function closeSSHTunnel() {
   if (tunnel) {
