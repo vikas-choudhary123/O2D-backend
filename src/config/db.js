@@ -14,6 +14,7 @@ export async function initPool() {
     await initSSHTunnel();
     tunnelInitialized = true;
 
+    // Initialize Oracle client (if on macOS or local)
     initOracleClient();
 
     console.log("📡 Creating Oracle connection pool...");
@@ -37,14 +38,19 @@ export async function initPool() {
     await testConn.close();
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
-    if (tunnelInitialized) await closeSSHTunnel();
+
     if (pool) {
       try {
         await pool.close(0);
       } catch (closeErr) {
-        console.error("Error closing pool:", closeErr);
+        console.error("Error closing pool:", closeErr.message);
       }
     }
+
+    if (tunnelInitialized) {
+      await closeSSHTunnel();
+    }
+
     throw err;
   }
 }
@@ -68,6 +74,6 @@ export async function closePool() {
       tunnelInitialized = false;
     }
   } catch (err) {
-    console.error("❌ Error closing pool:", err);
+    console.error("❌ Error closing pool:", err.message);
   }
 }
