@@ -1,13 +1,16 @@
-// import oracledb from "oracledb";
-import oracledb from 'oracledb-thin';
+import oracledb from "oracledb";
 import dotenv from "dotenv";
 import { initOracleClient } from "./oracleClient.js";
 import { initSSHTunnel, closeSSHTunnel } from "./sshTunnel.js";
 
+// Load environment variables
 dotenv.config();
 
 let pool;
 let sshTunnelActive = false;
+
+// Try different service names
+const SERVICE_NAMES = ['ORCL', 'XE', 'XEPDB1', 'orcl', 'ora11g'];
 
 export async function initPool() {
   try {
@@ -17,103 +20,110 @@ export async function initPool() {
     await initSSHTunnel();
     sshTunnelActive = true;
     
-    // Wait for tunnel to stabilize
-    console.log("⏳ Waiting for SSH tunnel to stabilize...");
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Wait a moment for tunnel to be fully established
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Initialize Oracle client
     initOracleClient();
 
-    console.log("📡 Creating Oracle connection pool for Oracle 11g...");
+    console.log("📡 Creating Oracle connection pool...");
 
-    // Connection configurations for Oracle 11g
-    const connectionTests = [
-      { 
-        connectString: "127.0.0.1:1521/ora11g", 
-        description: "ora11g service" 
-      },
-      { 
-        connectString: "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=ora11g)))", 
-        description: "TNS ora11g" 
-      },
-      { 
-        connectString: "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521))(CONNECT_DATA=(SID=ora11g)))", 
-        description: "SID ora11g" 
-      },
-    ];
-
-    let workingConfig = null;
+    // Try different service names
+    let lastError = null;
     
-    for (const test of connectionTests) {
+    for (const serviceName of SERVICE_NAMES) {
       try {
-        console.log(`🔄 Testing: ${test.description}`);
+        console.log(`🔄 Trying service name: ${serviceName}`);
         
-        const testConfig = {
+        const dbConfig = {
           user: process.env.ORACLE_USER,
           password: process.env.ORACLE_PASSWORD,
-          connectString: test.connectString,
+          connectString: `127.0.0.1:1521/${serviceName}`,
           poolMin: 1,
-          poolMax: 1,
-          poolTimeout: 10,
-          connectTimeout: 20000,
+          poolMax: 4,
+          poolIncrement: 1,
+          poolTimeout: 60,
+          queueTimeout: 30000,
+          connectTimeout: 30000,
         };
 
-        console.log(`   Using connectString: ${test.connectString}`);
+        console.log('Database config:', { 
+          user: dbConfig.user,
+          connectString: dbConfig.connectString
+        });
+
+        pool = await oracledb.createPool(dbConfig);
+        console.log(`✅ Oracle connection pool started with service: ${serviceName}`);
+
+        // Test connection
+        console.log("🧪 Testing database connection...");
+        await testConnectionWithRetry();
+        console.log("✅ Database connection test successful");
         
-        const testPool = await oracledb.createPool(testConfig);
-        const connection = await testPool.getConnection();
-        
-        // Test query
-        const result = await connection.execute(`SELECT USER as current_user FROM DUAL`);
-        console.log(`🎉 SUCCESS with ${test.description}! Connected as: ${result.rows[0][0]}`);
-        
-        await connection.close();
-        await testPool.close();
-        
-        workingConfig = test;
-        break;
+        return; // Success - exit the loop
         
       } catch (err) {
-        console.log(`❌ ${test.description} failed: ${err.message}`);
+        lastError = err;
+        console.log(`❌ Service ${serviceName} failed:`, err.message);
+        
+        // Close pool if it was created
+        if (pool) {
+          try {
+            await pool.close(0);
+            pool = null;
+          } catch (closeErr) {
+            console.error('Error closing pool:', closeErr);
+          }
+        }
+        
+        // Continue to next service name
         continue;
       }
     }
-
-    if (!workingConfig) {
-      throw new Error(`Oracle 11g connection failed.\n\nTried configurations:\n- ora11g service\n- TNS ora11g\n- SID ora11g\n\nPlease verify:\n1. Oracle service 'ora11g' is running\n2. Credentials are correct: ${process.env.ORACLE_USER}/***\n3. Oracle listener is active on port 1521`);
-    }
-
-    // Create main pool
-    console.log(`✅ Creating main pool with: ${workingConfig.description}`);
     
-    const dbConfig = {
-      user: process.env.ORACLE_USER,
-      password: process.env.ORACLE_PASSWORD,
-      connectString: workingConfig.connectString,
-      poolMin: 1,
-      poolMax: 4,
-      poolIncrement: 1,
-      poolTimeout: 60,
-      queueTimeout: 30000,
-      connectTimeout: 30000,
-    };
-
-    pool = await oracledb.createPool(dbConfig);
-    console.log("✅ Oracle 11g connection pool started");
-
-    // Final test
-    console.log("🧪 Final connection test...");
-    const connection = await pool.getConnection();
-    const result = await connection.execute(`SELECT TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') as db_time FROM DUAL`);
-    console.log(`✅ Database time: ${result.rows[0][0]}`);
-    await connection.close();
-    
-    console.log("🎉 Oracle 11g database connection fully established!");
+    // If we get here, all service names failed
+    throw new Error(`All service names failed. Last error: ${lastError?.message}`);
     
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
     await cleanup();
     throw err;
+  }
+}
+
+async function testConnectionWithRetry(maxRetries = 3, retryDelay = 2000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let connection;
+    try {
+      console.log(`🔗 Attempt ${attempt}: Getting connection from pool...`);
+      connection = await pool.getConnection();
+      console.log(`✅ Attempt ${attempt}: Got connection, executing test query...`);
+      
+      const result = await connection.execute(`SELECT 1 FROM DUAL`);
+      console.log(`✅ Attempt ${attempt}: Test query successful`);
+      
+      await connection.close();
+      console.log(`✅ Connection test successful (attempt ${attempt})`);
+      return;
+    } catch (err) {
+      console.log(`❌ Attempt ${attempt} failed:`, err.message);
+      
+      if (connection) {
+        try {
+          await connection.close();
+        } catch (closeErr) {
+          console.error('Error closing connection:', closeErr);
+        }
+      }
+      
+      if (attempt < maxRetries) {
+        console.log(`🔄 Retrying in ${retryDelay/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      } else {
+        console.log(`💥 All connection attempts failed`);
+        throw err;
+      }
+    }
   }
 }
 
@@ -124,7 +134,7 @@ async function cleanup() {
       pool = null;
       console.log("✅ Pool closed during cleanup");
     } catch (closeErr) {
-      console.error("Error closing pool:", closeErr.message);
+      console.error("Error closing pool:", closeErr);
     }
   }
   
@@ -134,7 +144,7 @@ async function cleanup() {
       sshTunnelActive = false;
       console.log("✅ SSH tunnel closed during cleanup");
     } catch (tunnelErr) {
-      console.error("Error closing SSH tunnel:", tunnelErr.message);
+      console.error("Error closing SSH tunnel:", tunnelErr);
     }
   }
 }
