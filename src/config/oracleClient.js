@@ -14,13 +14,38 @@
 
 
 
+
+// import oracledb from "oracledb";
+
+// export function initOracleClient() {
+//   try {
+//     // Only initialize locally (Mac)
+//     if (process.platform === "darwin") {
+//       oracledb.initOracleClient({ libDir: "/opt/oracle/instantclient_23_3_arm64" });
+//       console.log("✅ Oracle client initialized (local Mac)");
+//     } else {
+//       console.log("ℹ️ Skipping Oracle client init (cloud environment)");
+//     }
+//   } catch (err) {
+//     console.error("❌ Failed to initialize Oracle client:", err);
+//     process.exit(1);
+//   }
+// }
+
+
 import oracledb from 'oracledb';
+import fs from 'fs';
 
 export function initOracleClient() {
   try {
-    console.log('ℹ️ Using Oracle Thin Client (cloud environment)');
-    // No initialization needed for thin client in Render
+    const libDir = '/opt/oracle/instantclient_19_24';
+    if (fs.existsSync(libDir)) {
+      oracledb.initOracleClient({ libDir });
+      console.log('✅ Oracle Thick Client initialized');
+    } else {
+      console.log('⚠️ Oracle Instant Client not found, using Thin mode');
+    }
   } catch (err) {
-    console.log('ℹ️ Oracle Thin Client mode');
+    console.error('❌ Failed to initialize Oracle Client:', err);
   }
 }
