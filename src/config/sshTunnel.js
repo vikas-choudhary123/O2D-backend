@@ -1,16 +1,16 @@
-import tunnel from "tunnel-ssh";
+import { createTunnel } from "tunnel-ssh";
 
-let server; // holds the active SSH tunnel instance
+let tunnelServer; // holds the SSH tunnel instance
 
 const sshConfig = {
-  username: process.env.SSH_USERNAME,    // e.g. pipe
-  password: process.env.SSH_PASSWORD,    // e.g. @dmin*$121#
-  host: process.env.SSH_HOST,            // e.g. 115.244.175.130
+  username: process.env.SSH_USERNAME,    // e.g. "pipe"
+  password: process.env.SSH_PASSWORD,    // e.g. "@dmin*$121#"
+  host: process.env.SSH_HOST,            // e.g. "115.244.175.130"
   port: parseInt(process.env.SSH_PORT) || 22,
-  dstHost: "localhost",                  // 👈 same as your working manual SSH command
-  dstPort: 1521,                         // Oracle database port on the remote server
-  localHost: "127.0.0.1",                // local side of the tunnel
-  localPort: 1521,                       // local port to connect Oracle through
+  dstHost: "localhost",                  // same as your manual ssh -L command
+  dstPort: 1521,                         // Oracle DB port
+  localHost: "127.0.0.1",
+  localPort: 1521,
   keepAlive: true,
 };
 
@@ -25,13 +25,8 @@ export async function initSSHTunnel() {
   try {
     console.log(`🔐 Creating SSH tunnel to ${sshConfig.host}...`);
 
-    // tunnel-ssh returns a net.Server, not a Promise — wrap it manually
-    server = await new Promise((resolve, reject) => {
-      const srv = tunnel(sshConfig, (error) => {
-        if (error) reject(error);
-        else resolve(srv);
-      });
-    });
+    // ✅ correct API for tunnel-ssh@5.x
+    tunnelServer = await createTunnel({}, null, sshConfig);
 
     console.log("✅ SSH tunnel established on 127.0.0.1:1521");
   } catch (err) {
@@ -41,11 +36,11 @@ export async function initSSHTunnel() {
 }
 
 export async function closeSSHTunnel() {
-  if (server) {
+  if (tunnelServer) {
     try {
-      server.close();
+      tunnelServer.close();
       console.log("✅ SSH tunnel closed");
-      server = null;
+      tunnelServer = null;
     } catch (err) {
       console.error("❌ Error closing SSH tunnel:", err);
     }
