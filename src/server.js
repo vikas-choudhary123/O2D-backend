@@ -167,6 +167,123 @@ app.get('/test-service-names', async (req, res) => {
   });
 });
 
+// Test if we can reach the actual Oracle port on the remote server
+app.get('/test-oracle-port', async (req, res) => {
+  const { Client } = await import('ssh2');
+  
+  console.log('🧪 Testing direct Oracle port connectivity through SSH...');
+  
+  const sshClient = new Client();
+  
+  sshClient.on('ready', () => {
+    console.log('✅ SSH connected, testing Oracle port...');
+    
+    sshClient.forwardOut(
+      '127.0.0.1',
+      0,
+      '127.0.0.1', // Connect to Oracle on the same SSH server
+      1521,
+      (err, stream) => {
+        if (err) {
+          console.error('❌ Oracle port test failed:', err.message);
+          res.status(500).json({ 
+            success: false, 
+            error: `Cannot reach Oracle port: ${err.message}` 
+          });
+          sshClient.end();
+          return;
+        }
+        
+        console.log('✅ Oracle port 1521 is reachable through SSH');
+        stream.destroy();
+        sshClient.end();
+        
+        res.json({ 
+          success: true, 
+          message: 'Oracle port 1521 is accessible through SSH',
+          test: 'oracle_port_access'
+        });
+      }
+    );
+  });
+
+  sshClient.on('error', (err) => {
+    console.error('❌ SSH error:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  });
+
+  sshClient.connect({
+    host: process.env.SSH_HOST,
+    port: parseInt(process.env.SSH_PORT) || 22,
+    username: process.env.SSH_USER,
+    password: process.env.SSH_PASSWORD,
+    readyTimeout: 30000
+  });
+});
+
+app.get('/test-credentials', async (req, res) => {
+  const { Client } = await import('ssh2');
+  
+  console.log('🧪 Testing Oracle credentials...');
+  
+  const sshClient = new Client();
+  
+  sshClient.on('ready', () => {
+    console.log('✅ SSH connected, testing credentials with simple TCP test...');
+    
+    // This simulates what Oracle client does
+    sshClient.forwardOut(
+      '127.0.0.1',
+      0,
+      '127.0.0.1',
+      1521,
+      (err, stream) => {
+        if (err) {
+          console.error('❌ Cannot create forward:', err);
+          res.status(500).json({ error: 'SSH forward failed: ' + err.message });
+          sshClient.end();
+          return;
+        }
+
+        // Try to send a simple payload (Oracle connection attempt)
+        setTimeout(() => {
+          stream.destroy();
+          sshClient.end();
+          
+          res.json({ 
+            success: true, 
+            message: 'Basic connection test completed',
+            note: 'This tests network connectivity. Actual authentication happens at Oracle protocol level.'
+          });
+        }, 1000);
+
+        stream.on('data', (data) => {
+          console.log('📨 Received data from Oracle:', data.toString('hex'));
+        });
+
+        stream.on('error', (streamErr) => {
+          console.error('Stream error:', streamErr);
+        });
+      }
+    );
+  });
+
+  sshClient.on('error', (err) => {
+    console.error('SSH error:', err);
+    res.status(500).json({ error: 'SSH failed: ' + err.message });
+  });
+
+  sshClient.connect({
+    host: process.env.SSH_HOST,
+    port: parseInt(process.env.SSH_PORT) || 22,
+    username: process.env.SSH_USER,
+    password: process.env.SSH_PASSWORD,
+  });
+});
+
 // Initialize server
 async function startServer() {
   try {

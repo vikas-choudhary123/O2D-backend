@@ -3,86 +3,84 @@ import dotenv from "dotenv";
 import { initOracleClient } from "./oracleClient.js";
 import { initSSHTunnel, closeSSHTunnel } from "./sshTunnel.js";
 
-// Load environment variables
 dotenv.config();
 
 let pool;
 let sshTunnelActive = false;
 
-// Try different service names
-const SERVICE_NAMES = ['ORCL', 'XE', 'XEPDB1', 'orcl', 'ora11g'];
+// Test different connection scenarios
+const CONNECTION_TESTS = [
+  // Try different service names
+  { connectString: "127.0.0.1:1521/ORCL", description: "ORCL service" },
+  { connectString: "127.0.0.1:1521/XE", description: "XE service" },
+  { connectString: "127.0.0.1:1521", description: "No service name" },
+  // Try different ports (common Oracle ports)
+  { connectString: "127.0.0.1:1522/ORCL", description: "Port 1522" },
+  { connectString: "127.0.0.1:1526/ORCL", description: "Port 1526" },
+];
 
 export async function initPool() {
   try {
     console.log("🔐 Initializing SSH tunnel...");
     
-    // Initialize SSH tunnel first
     await initSSHTunnel();
     sshTunnelActive = true;
-    
-    // Wait a moment for tunnel to be fully established
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Initialize Oracle client
     initOracleClient();
 
-    console.log("📡 Creating Oracle connection pool...");
+    console.log("📡 Testing Oracle connection scenarios...");
 
-    // Try different service names
     let lastError = null;
     
-    for (const serviceName of SERVICE_NAMES) {
+    for (const test of CONNECTION_TESTS) {
       try {
-        console.log(`🔄 Trying service name: ${serviceName}`);
+        console.log(`🔄 Testing: ${test.description} - ${test.connectString}`);
         
         const dbConfig = {
           user: process.env.ORACLE_USER,
           password: process.env.ORACLE_PASSWORD,
-          connectString: `127.0.0.1:1521/${serviceName}`,
+          connectString: test.connectString,
           poolMin: 1,
-          poolMax: 4,
-          poolIncrement: 1,
-          poolTimeout: 60,
-          queueTimeout: 30000,
-          connectTimeout: 30000,
+          poolMax: 1, // Small pool for testing
+          poolTimeout: 10,
+          connectTimeout: 10000,
         };
 
-        console.log('Database config:', { 
-          user: dbConfig.user,
-          connectString: dbConfig.connectString
-        });
-
         pool = await oracledb.createPool(dbConfig);
-        console.log(`✅ Oracle connection pool started with service: ${serviceName}`);
+        console.log(`✅ Pool created for: ${test.description}`);
 
-        // Test connection
-        console.log("🧪 Testing database connection...");
-        await testConnectionWithRetry();
-        console.log("✅ Database connection test successful");
+        // Simple connection test
+        const connection = await pool.getConnection();
+        console.log(`✅ Connection successful for: ${test.description}`);
         
-        return; // Success - exit the loop
+        // Test a query
+        const result = await connection.execute(`SELECT USER FROM DUAL`);
+        console.log(`✅ Query successful. Connected as: ${result.rows[0][0]}`);
+        
+        await connection.close();
+        await pool.close(0);
+        
+        console.log(`🎉 SUCCESS: Working configuration found: ${test.description}`);
+        return; // Exit on success
         
       } catch (err) {
         lastError = err;
-        console.log(`❌ Service ${serviceName} failed:`, err.message);
+        console.log(`❌ ${test.description} failed: ${err.message}`);
         
-        // Close pool if it was created
         if (pool) {
           try {
             await pool.close(0);
             pool = null;
           } catch (closeErr) {
-            console.error('Error closing pool:', closeErr);
+            // Ignore close errors
           }
         }
-        
-        // Continue to next service name
         continue;
       }
     }
     
-    // If we get here, all service names failed
-    throw new Error(`All service names failed. Last error: ${lastError?.message}`);
+    throw new Error(`All connection tests failed. Last error: ${lastError?.message}`);
     
   } catch (err) {
     console.error("❌ Pool init failed:", err.message);
