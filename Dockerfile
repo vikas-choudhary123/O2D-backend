@@ -1,22 +1,22 @@
 FROM node:18-slim
 
-# Install system dependencies
+# Install required system libraries
 RUN apt-get update && apt-get install -y libaio1 unzip curl
 
-# Set working directory
+# Create app directory
 WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy the rest of the code
+# Copy all code
 COPY . .
 
-# Set environment variable for Oracle Client path
+# Set Oracle client environment variable
 ENV LD_LIBRARY_PATH=/app/oracle_client/instantclient_23_26
 
-# Expose the backend port
+# Expose your app’s port
 EXPOSE 3007
 
 # Start the app
