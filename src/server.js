@@ -1,52 +1,23 @@
 import express from 'express';
 import { initPool, closePool, getConnection } from './config/db.js';
+import net from 'net'; // Import net for TCP testing
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3007;
 
 app.use(express.json());
 
-// Initialize database on startup
-app.listen(PORT, async () => {
-  try {
-    await initPool();
-    console.log(`🚀 Server running on port ${PORT}`);
-    
-    // Test route
-    app.get('/test-db', async (req, res) => {
-      try {
-        const connection = await getConnection();
-        const result = await connection.execute(
-          `SELECT TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') AS current_time FROM DUAL`
-        );
-        await connection.close();
-        
-        res.json({ 
-          success: true, 
-          current_time: result.rows[0][0],
-          message: 'Database connection successful' 
-        });
-      } catch (error) {
-        res.status(500).json({ 
-          success: false, 
-          error: error.message 
-        });
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
-  }
+// Health check route
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
 });
 
-
-// Add these routes after your existing routes in server.js
-
-// Test SSH tunnel specifically
+// Test SSH tunnel specifically (FIXED - no require)
 app.get('/test-tunnel', (req, res) => {
-  const net = require('net');
-  
   console.log('🧪 Testing SSH tunnel connectivity...');
   
   const socket = new net.Socket();
@@ -145,15 +116,96 @@ app.get('/env-check', (req, res) => {
   });
 });
 
+// Test different service names
+app.get('/test-service-names', async (req, res) => {
+  const serviceNames = ['ora11g', 'ORCL', 'XE', 'XEPDB1', 'orcl'];
+  const results = [];
+  
+  for (const serviceName of serviceNames) {
+    try {
+      console.log(`🧪 Testing service name: ${serviceName}`);
+      
+      // Create a temporary pool with this service name
+      const tempPool = await import('oracledb').then(oracledb => 
+        oracledb.default.createPool({
+          user: process.env.ORACLE_USER,
+          password: process.env.ORACLE_PASSWORD,
+          connectString: `127.0.0.1:1521/${serviceName}`,
+          poolMin: 1,
+          poolMax: 1,
+          poolTimeout: 10,
+          queueTimeout: 10000,
+        })
+      );
+      
+      const connection = await tempPool.getConnection();
+      const result = await connection.execute(`SELECT 1 FROM DUAL`);
+      await connection.close();
+      await tempPool.close();
+      
+      results.push({
+        serviceName,
+        status: 'SUCCESS',
+        message: 'Connection successful'
+      });
+      
+      console.log(`✅ Service ${serviceName}: SUCCESS`);
+      
+    } catch (error) {
+      results.push({
+        serviceName,
+        status: 'FAILED',
+        message: error.message
+      });
+      console.log(`❌ Service ${serviceName}: ${error.message}`);
+    }
+  }
+  
+  res.json({
+    test: 'service_name_discovery',
+    results: results
+  });
+});
+
+// Initialize server
+async function startServer() {
+  try {
+    console.log('🚀 Starting server...');
+    console.log('📝 Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      PORT: process.env.PORT,
+      SSH_USER_SET: !!process.env.SSH_USER
+    });
+    
+    // Initialize database connection first
+    await initPool();
+    
+    // Start HTTP server
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`🔗 Health check: https://your-app.onrender.com/health`);
+      console.log(`🔗 DB test: https://your-app.onrender.com/test-db-detailed`);
+      console.log(`🔗 Service name test: https://your-app.onrender.com/test-service-names`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to start server:', error.message);
+    process.exit(1);
+  }
+}
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('🛑 Shutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...');
   await closePool();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('🛑 Shutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...');
   await closePool();
   process.exit(0);
 });
+
+// Start the application
+startServer();
