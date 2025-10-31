@@ -1,42 +1,36 @@
-// ✅ Works in ESM (type: "module")
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const tunnel = require("tunnel-ssh");
+const { createTunnel } = require("tunnel-ssh"); // ✅ use the correct named export
 
 let tunnelServer = null;
 
 export async function initSSHTunnel() {
   console.log("🔐 Creating SSH tunnel...");
 
-  return new Promise((resolve, reject) => {
-    const config = {
-      username: process.env.SSH_USERNAME,
-      password: process.env.SSH_PASSWORD,
-      host: process.env.SSH_HOST,
-      port: parseInt(process.env.SSH_PORT) || 22,
+  const config = {
+    username: process.env.SSH_USERNAME,
+    password: process.env.SSH_PASSWORD,
+    host: process.env.SSH_HOST,
+    port: parseInt(process.env.SSH_PORT) || 22,
 
-      // 👇 Destination: where Oracle DB actually runs (inside LAN)
-      dstHost: "192.168.1.6",
-      dstPort: 1521,
+    // 👇 Where Oracle actually runs inside LAN
+    dstHost: "192.168.1.6",
+    dstPort: 1521,
 
-      // 👇 Local binding: what your Node app connects to
-      localHost: "127.0.0.1",
-      localPort: 1521,
+    // 👇 Local binding (what Node connects to)
+    localHost: "127.0.0.1",
+    localPort: 1521,
 
-      keepAlive: true,
-    };
+    keepAlive: true,
+  };
 
-    tunnel(config, (error, server) => {
-      if (error) {
-        console.error("❌ SSH tunnel failed:", error.message);
-        reject(error);
-      } else {
-        tunnelServer = server;
-        console.log("✅ SSH tunnel established on 127.0.0.1:1521");
-        resolve(server);
-      }
-    });
-  });
+  try {
+    tunnelServer = await createTunnel({}, null, config); // ✅ correct call for v5.x
+    console.log("✅ SSH tunnel established on 127.0.0.1:1521");
+  } catch (error) {
+    console.error("❌ SSH tunnel failed:", error.message);
+    throw error;
+  }
 }
 
 export async function closeSSHTunnel() {
