@@ -16,6 +16,45 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Simple connection test
+app.get('/test-connection', async (req, res) => {
+  let connection;
+  try {
+    connection = await getConnection();
+    const result = await connection.execute(`
+      SELECT 
+        USER as current_user,
+        TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') as db_time,
+        (SELECT NAME FROM v$database) as db_name
+      FROM DUAL
+    `);
+    
+    res.json({
+      success: true,
+      user: result.rows[0][0],
+      db_time: result.rows[0][1],
+      db_name: result.rows[0][2],
+      message: 'Oracle connection successful!'
+    });
+    
+  } catch (error) {
+    console.error('Connection test failed:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      suggestion: 'Check Oracle credentials and service name'
+    });
+  } finally {
+    if (connection) {
+      try {
+        await connection.close();
+      } catch (closeErr) {
+        console.error('Error closing connection:', closeErr);
+      }
+    }
+  }
+});
+
 // Test SSH tunnel specifically (FIXED - no require)
 app.get('/test-tunnel', (req, res) => {
   console.log('🧪 Testing SSH tunnel connectivity...');
